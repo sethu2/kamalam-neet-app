@@ -1,4 +1,3 @@
-// src/pages/QuizPage.jsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../utils/supabaseClient";
@@ -9,13 +8,23 @@ function QuizPage() {
   const [answers, setAnswers] = useState({});
   const [marked, setMarked] = useState([]);
   const [timeLeft, setTimeLeft] = useState(60 * 60);
+  const [questionStartTime, setQuestionStartTime] = useState(Date.now());
+  const [questionTimes, setQuestionTimes] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchQuestions = async () => {
-      const { data, error } = await supabase.from("questions").select("*");
+      localStorage.removeItem("kamalam_questions"); // clear old cache
+      const { data, error } = await supabase
+        .from("questions")
+        .select("*")
+        .order("id", { ascending: true });
       if (!error) {
         setQuestions(data);
+        setCurrentIndex(0);
+        setQuestionStartTime(Date.now());
+      } else {
+        console.error("Error fetching questions:", error.message);
       }
     };
     fetchQuestions();
@@ -33,6 +42,16 @@ function QuizPage() {
   const currentQ = questions[currentIndex];
   const selected = answers[currentQ.id];
 
+  const recordTime = () => {
+    const now = Date.now();
+    const timeSpent = Math.floor((now - questionStartTime) / 1000);
+    setQuestionTimes((prev) => ({
+      ...prev,
+      [currentQ.id]: (prev[currentQ.id] || 0) + timeSpent,
+    }));
+    setQuestionStartTime(now);
+  };
+
   const handleOptionClick = (option) => {
     setAnswers((prev) => ({
       ...prev,
@@ -44,23 +63,28 @@ function QuizPage() {
     if (!marked.includes(currentIndex)) {
       setMarked([...marked, currentIndex]);
     }
+    recordTime();
     handleNext();
   };
 
   const handleNext = () => {
+    recordTime();
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(currentIndex + 1);
     }
   };
 
   const handlePrev = () => {
+    recordTime();
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
     }
   };
 
   const handleSubmit = () => {
+    recordTime();
     localStorage.setItem("kamalam_answers", JSON.stringify(answers));
+    localStorage.setItem("kamalam_timings", JSON.stringify(questionTimes));
     localStorage.setItem("quiz_submitted", true);
     localStorage.setItem("kamalam_questions", JSON.stringify(questions));
     navigate("/result");
@@ -74,10 +98,15 @@ function QuizPage() {
 
   return (
     <div style={{ maxWidth: "700px", margin: "auto", padding: "24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2>
-          Q{currentIndex + 1}: {currentQ.question}
-        </h2>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+        }}
+      >
+        <h2>Q{currentIndex + 1}: {currentQ.question}</h2>
         <div style={{ color: "red", fontWeight: "bold" }}>
           ⏰ {formatTime(timeLeft)}
         </div>
@@ -107,43 +136,76 @@ function QuizPage() {
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: "20px", gap: "10px" }}>
-        <button onClick={handlePrev} disabled={currentIndex === 0} style={{ padding: "10px 16px", borderRadius: "4px", backgroundColor: "#ccc", cursor: "pointer" }}>
+        <button
+          onClick={handlePrev}
+          disabled={currentIndex === 0}
+          style={{
+            padding: "10px 16px",
+            borderRadius: "4px",
+            backgroundColor: "#ccc",
+            cursor: "pointer",
+          }}
+        >
           ⬅️ Previous
         </button>
-        <button onClick={handleMarkForLater} style={{ padding: "10px 16px", borderRadius: "4px", backgroundColor: "#ffc107", cursor: "pointer" }}>
+
+        <button
+          onClick={handleMarkForLater}
+          style={{
+            padding: "10px 16px",
+            borderRadius: "4px",
+            backgroundColor: "#ffc107",
+            cursor: "pointer",
+          }}
+        >
           ⭐ Mark for Later
         </button>
-        <button onClick={handleNext} disabled={currentIndex === questions.length - 1} style={{ padding: "10px 16px", borderRadius: "4px", backgroundColor: "#ccc", cursor: "pointer" }}>
+
+        <button
+          onClick={handleNext}
+          disabled={currentIndex === questions.length - 1}
+          style={{
+            padding: "10px 16px",
+            borderRadius: "4px",
+            backgroundColor: "#ccc",
+            cursor: "pointer",
+          }}
+        >
           Next ➡️
         </button>
       </div>
 
-      {/* Navigator Box */}
-      <div style={{ marginTop: "30px", textAlign: "center", backgroundColor: "#047857", padding: "20px", borderRadius: "10px" }}>
-        <h4 style={{ marginBottom: "10px", color: "white" }}>📚 Navigate Questions</h4>
+      {/* Navigator */}
+      <div style={{ marginTop: "30px", textAlign: "center" }}>
+        <h4 style={{ marginBottom: "10px" }}>📚 Navigate Questions</h4>
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "8px" }}>
           {questions.map((q, index) => {
             const isAnswered = answers[q.id];
-            const isCurrent = currentIndex === index;
-
-            let backgroundColor = "#facc15"; // yellow
-            if (isCurrent) backgroundColor = "#2563eb"; // blue
-            else if (isAnswered) backgroundColor = "#10b981"; // green
-
+            const isMarked = marked.includes(index);
             return (
               <button
                 key={q.id}
-                onClick={() => setCurrentIndex(index)}
+                onClick={() => {
+                  recordTime();
+                  setCurrentIndex(index);
+                }}
                 style={{
                   width: "36px",
                   height: "36px",
                   borderRadius: "6px",
-                  border: "2px solid white",
+                  border: "none",
                   fontWeight: "bold",
-                  backgroundColor,
-                  color: isCurrent ? "#fff" : "#000",
+                  backgroundColor:
+                    currentIndex === index
+                      ? "#2563eb"           // current
+                      : isMarked
+                      ? "#f97316"           // orange
+                      : isAnswered
+                      ? "#10b981"           // green
+                      : "#facc15",          // yellow
+                  color: currentIndex === index ? "white" : "#000",
                   cursor: "pointer",
-                  transition: "all 0.2s ease"
+                  transition: "all 0.2s ease",
                 }}
               >
                 {index + 1}
@@ -153,7 +215,6 @@ function QuizPage() {
         </div>
       </div>
 
-      {/* Submit Button */}
       <div style={{ textAlign: "center", marginTop: "30px" }}>
         <button
           onClick={handleSubmit}
