@@ -7,7 +7,7 @@ function QuizPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState({});
   const [marked, setMarked] = useState([]);
-  const [timeLeft, setTimeLeft] = useState(60 * 60);
+  const [timeLeft, setTimeLeft] = useState(180 * 60); // 3 hours
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
   const [questionTimes, setQuestionTimes] = useState({});
   const navigate = useNavigate();
@@ -18,7 +18,8 @@ function QuizPage() {
       const { data, error } = await supabase
         .from("questions")
         .select("*")
-        .order("id", { ascending: true });
+        .order("id", { ascending: true })
+        .limit(280); // increased from 180
       if (!error) {
         setQuestions(data);
         setCurrentIndex(0);
@@ -128,9 +129,15 @@ function QuizPage() {
               textAlign: "left",
               cursor: "pointer",
               transition: "all 0.2s ease",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px"
             }}
           >
-            {opt}
+            <span style={{ fontWeight: "bold", minWidth: "24px" }}>
+              {String.fromCharCode(65 + i)}.
+            </span>
+            <span>{opt}</span>
           </button>
         ))}
       </div>
@@ -199,10 +206,10 @@ function QuizPage() {
                     currentIndex === index
                       ? "#2563eb"           // current
                       : isMarked
-                      ? "#f97316"           // orange
-                      : isAnswered
-                      ? "#10b981"           // green
-                      : "#facc15",          // yellow
+                        ? "#f97316"           // orange
+                        : isAnswered
+                          ? "#10b981"           // green
+                          : "#facc15",          // yellow
                   color: currentIndex === index ? "white" : "#000",
                   cursor: "pointer",
                   transition: "all 0.2s ease",
